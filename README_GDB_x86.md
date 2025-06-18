@@ -101,6 +101,39 @@ Exemple ligne `gdb` :
 3. **Tu peux voir la section d’une adresse avec** :
 ```bash
 readelf -S programme
+
+---
+
+## 🧮 5. Les registres en x86 (32 bits)
+
+Les registres sont des emplacements mémoire très rapides utilisés pour stocker temporairement des données pendant l'exécution des instructions. Voici les principaux registres généraux en architecture x86 :
+
+| Registre | Nom complet | Usage principal |
+|----------|-------------|-----------------|
+| `EAX`    | Accumulateur | Résultats d'opérations arithmétiques, retours de fonctions |
+| `EBX`    | Base         | Utilisation libre, souvent utilisé pour stocker des pointeurs |
+| `ECX`    | Counter      | Utilisé comme compteur dans les boucles, instructions répétées (`rep`) |
+| `EDX`    | Data         | I/O, multiplication/division longues |
+| `ESI`    | Source Index | Source dans les opérations de copie mémoire (`movs`, `stos`) |
+| `EDI`    | Dest Index   | Destination dans les opérations de copie mémoire |
+| `EBP`    | Base Pointer | Pointe vers le bas de la pile d'une fonction (cadre de pile) |
+| `ESP`    | Stack Pointer| Pointe vers le haut de la pile (top stack) |
+| `EIP`    | Instruction Pointer | Adresse de la prochaine instruction à exécuter |
+
+### 🔧 Registres spéciaux
+
+- `EFLAGS` : Contient des **flags** qui reflètent l'état du processeur (Zero Flag, Carry, Overflow, etc.).
+- `CS`, `DS`, `SS`, etc. : Registres de segment (utilisés pour la segmentation mémoire, moins courant en analyse simple).
+- `AX`, `BX`, etc. : Versions 16 bits des registres (`EAX` → `AX` → `AH`/`AL` pour haut/bas octet).
+
+---
+
+### 💡 Tips
+
+- Le registre `EIP` **n'est jamais modifié directement**. Il change après un `call`, `jmp`, `ret` ou instruction normale.
+- Tu peux afficher tous les registres avec :
+```bash
+(gdb) info registers
 ```
 
 ---
@@ -142,6 +175,3 @@ gdb ./a.out
 - Utiliser GDB, c’est **observer le comportement d’un programme en live**, comprendre ce qui se passe instruction par instruction.
 
 ---
-
-🛠 Si tu veux un exemple pratique à partir d’un **code C**, dis-le-moi et je te ferai un `main.c` + son analyse avec GDB.
-Tu veux aussi une **version imprimable ou visuelle de ce guide** ?
