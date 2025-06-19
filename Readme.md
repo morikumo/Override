@@ -54,6 +54,8 @@ Exemple de resultat :
 
 Ne surtout pas oublier d'utiliser la commande scp !  Trés utile pour copier les executables de la VM a la machine local pour exploiter a fond l'executable (décompiler etc..)
 
+Décompiler : - https://dogbolt.org/
+
 Exemple d'utilisation (dans la machine local pâs la vm) :
 
 **scp -P 4242 level00@192.168.56.101:/home/users/level00/level00 .**
