@@ -1,0 +1,1 @@
+level02@OverRide:~$ (python -c 'print "%x " * 25') | ./level02 -- Bien sur a bosser
