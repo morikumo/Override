@@ -22,3 +22,12 @@ level05@OverRide:~$ python -c 'print "AAAA" + "%lx " * 20' | ./level05
 aaaa64 f7fcfac0 f7ec3add ffffd6df ffffd6de 0 ffffffff ffffd764 f7fdb000 61616161 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25
 
 On observe 61616161 qui est notre AAAA notre offset est donc au 10 emplacement on va pouvoir agir potentiellement par ici
+
+
+
+Etant donner que l'on va essayer de rentrer un shellcode on va le mettre dans une variable d'environnement pour ne pas depasser les 100 caracteres imposer par fgets.
+
+On va rediriger le ret de exit pour mettre notre shellcode dedans.
+
+n va essayer d'ecrire dans la memoire avec %n l'argument de printf et de profiter du format string vunerability
+
