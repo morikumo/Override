@@ -102,7 +102,7 @@ ssh -p 4242 level00@192.168.56.101
 
 ## 📁 Transférer les fichiers avec SCP
 
-Une fois connecté, **récupérez les binaires** depuis la VM pour les analyser localement :
+Une fois connecté, **récupérez les binaires** depuis la VM pour les analyser localement (scp se fait sur la machine local):
 
 ```bash
 scp -P 4242 level00@192.168.56.101:/home/users/level00/level00 .
