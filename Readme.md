@@ -1,61 +1,121 @@
-# Consignes et explications
+# ✅ Connexion à la VM via SSH – Guide complet
 
-## Tout d'abord la connection en ssh via la VM
+## 📌 Objectif
 
-### Etant donné que je suis sur WSL :
+Pouvoir se connecter en SSH à la VM *OverRide* pour travailler sur les niveaux, récupérer les binaires, et les exploiter localement.
 
-Passer en mode "Bridged Adapter" pour que la VM soit sur le même réseau que WSL et avoir une IP type 192.168.x.x (préférable).
+---
 
-Ajouter une redirection de port (Port Forwarding) sur VirtualBox :
+## 🧱 Pré-requis
 
-Redémarre la VM et teste :
+* Avoir une **VM OverRide** fonctionnelle dans **VirtualBox**
+* La VM doit écouter sur le port **4242 en SSH**
+* Avoir accès à un terminal (Linux/macOS/WSL/Cygwin/Powershell avec OpenSSH…)
 
-ssh -p 4242 level00@<Ip-addr>
+---
 
-## ////////////////////////////////
+## 🛠️ Méthode 1 : Bridged Adapter + Redirection de port
 
-## Solution 2 :
+### 1. Configuration de VirtualBox
 
-Etant donné que l'option précdente n'était pas concluante je suis passer sur du **Host-only network** dans la configuration réseau avec lequel on ajoute un **Host-only network** dans la section :
- **file > tool > Network manager > Host-only network > Create**
+* Allez dans les **paramètres réseau** de la VM
+* Sélectionnez :
+  → **Adaptateur attaché à :** *Accès par pont (Bridged Adapter)*
+  → Cela place la VM sur le **même réseau local** que votre machine hôte
 
-Si ça n'est pas 
+### 2. (Optionnel) Redirection de port
 
+* Dans :
+  `Paramètres > Réseau > Avancé > Redirection de port`
+  → Ajouter une règle de redirection :
 
-Lancer la vm et utiliser l'ip que l'iso vous fourni ex: 192.168.x.x
+  | Nom      | Protocole | Hôte IP | Port Hôte | IP Invité | Port Invité |
+  | -------- | --------- | ------- | --------- | --------- | ----------- |
+  | SSH Rule | TCP       |         | `4242`    |           | `4242`      |
 
-Essayer comme ça :
+### 3. Connexion SSH
 
-**ssh -p 4242 level00@< Ip-addr >**
+```bash
+ssh -p 4242 level00@192.168.x.x
+```
 
-#### Si ça ne marche toujours pas !
+> Remplacez `192.168.x.x` par l’adresse IP affichée au démarrage de la VM
 
-Dans ce cas vous recuperer l'ip prefix fourni par l'iso que vous avez en lançant la vm et vous le passer a nmap (nmap n'est pas interne il faut l'installer si ce n'est pas déja fait).
+---
 
-Ex:
-**nmap 192.168.56.101**
+## 🔁 Méthode 2 : Réseau Host-only (Privé)
 
-Exemple de resultat : 
+### 1. Créer un réseau Host-only
 
-**Nmap scan report for 192.168.56.101**
+* Ouvrir **VirtualBox**
+* Aller dans :
+  `Fichier` → `Gestionnaire de Réseau Hôte (Network Manager)`
+  → Créer un nouveau **Host-only network** (ex: `vboxnet0`)
 
-**Host is up (0.62s latency).**
+### 2. Lier ce réseau à la VM
 
-**Not shown: 999 closed ports**
+* Dans les **paramètres réseau de la VM** :
+  → **Adaptateur 1 :** attaché à *Réseau privé hôte (Host-only Adapter)*
 
-**PORT     STATE SERVICE**
+### 3. Connexion
 
-**4242/tcp open  vrml-multi-use**
+* Démarrer la VM et noter l’**adresse IP affichée par l’ISO** (ex: `192.168.56.x`)
+* Connexion SSH :
 
+```bash
+ssh -p 4242 level00@192.168.56.x
+```
 
-## Une fois la connection établie
+---
 
-### Petite consigne importante 
+## 🔍 Si aucune IP ne fonctionne : Scanner avec `nmap`
 
-Ne surtout pas oublier d'utiliser la commande scp !  Trés utile pour copier les executables de la VM a la machine local pour exploiter a fond l'executable (décompiler etc..)
+### 1. Installer `nmap` (si ce n’est pas déjà fait)
 
-Décompiler : - https://dogbolt.org/
+```bash
+sudo apt install nmap   # ou brew install nmap sur macOS
+```
 
-Exemple d'utilisation (dans la machine local pâs la vm) :
+### 2. Scanner un sous-réseau local pour détecter la VM
 
-**scp -P 4242 level00@192.168.56.101:/home/users/level00/level00 .**
+```bash
+nmap 192.168.56.0/24
+```
+
+### Exemple de sortie :
+
+```
+Nmap scan report for 192.168.56.101
+Host is up (0.62s latency).
+Not shown: 999 closed ports
+PORT     STATE SERVICE
+4242/tcp open  vrml-multi-use
+```
+
+→ Connexion SSH :
+
+```bash
+ssh -p 4242 level00@192.168.56.101
+```
+
+---
+
+## 📁 Transférer les fichiers avec SCP
+
+Une fois connecté, **récupérez les binaires** depuis la VM pour les analyser localement :
+
+```bash
+scp -P 4242 level00@192.168.56.101:/home/users/level00/level00 .
+```
+
+> Cela copie le fichier `level00` depuis la VM vers votre machine actuelle
+
+---
+
+## 🔧 Exploitation en local (décompilation, analyse…)
+
+* Utilisez vos outils locaux : `gdb`, `ltrace`, `strace`, `radare2`, `Ghidra`, etc.
+* Vous pouvez aussi utiliser des décompilateurs en ligne :
+
+🔗 [Dogbolt – Explorateur interactif de compilateurs](https://dogbolt.org/)
+
