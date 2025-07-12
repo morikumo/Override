@@ -105,15 +105,18 @@ On va utiliser `%hn` pour écrire deux fois **2 octets** à cette adresse (écri
 
 Shellcode = `0xffffd870` → on découpe :
 
-* Low = `0xd870` = `56400`
+* Low = `0xd870` = `56401`
 * High = `0xffff` = `65535`
+
+
+65535 - 56401 = 9134
 
 Mais attention, on a déjà écrit **8 octets** avant notre `%x` (deux adresses = 2×4 octets).
 
 Donc on fait :
 
 ```bash
-56400 + 9126 = 65526 = 0xfff6 (juste sous 0xffff pour compenser les 8 octets)
+56401 + 9126 = 65526 = 0xfff6 (juste sous 0xffff pour compenser les 8 octets)
 ```
 
 ---
