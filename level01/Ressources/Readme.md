@@ -39,6 +39,13 @@ Non-debugging symbols:
 
 On a donc tout ce qu’il faut à disposition pour **exécuter un shell sans shellcode**, en exploitant uniquement ce qu’on a dans la **libc**.
 
+
+Pour trouver l'adresse de la string /bin/sh on effectue cette commande sur gdb :
+
+```gdb
+find &system,+9999999,"/bin/sh"
+```
+
 ---
 
 ## Plan d’exploitation
