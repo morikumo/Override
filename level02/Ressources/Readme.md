@@ -72,6 +72,15 @@ Le système est en **64 bits**, donc `%x` lit **4 octets**. Pour avoir l’inté
 (python -c 'print "%lx " * 40') | ./level02
 ```
 
+Pour afficher le dernier morceaux (si il ne s'affiche pas), on l'affiche avec :
+
+```bash
+(python -c 'print "%26$lx"') | ./level02
+```
+
+Pour afficher le 26eme element, ou le X element changer le 26 par le nombre voulu du coup.
+
+
 Résultat (partie intéressante) :
 
 ```
